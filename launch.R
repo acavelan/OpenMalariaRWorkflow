@@ -12,19 +12,28 @@ pacman::p_load(char = c("foreach", "doParallel", "dplyr", "data.table"))
 # sciCORE Slurm parameters:
 sciCORE = list(
     use = TRUE,
-    account = "penny",
-    jobName = "OpenMalaria"
+    account = "chitnis",
+    jobName = "OpenMalaria",
+    qos = "30min",
+    time = "00:30:00",
+    cpus_per_task=16, # number of CPUs per job
+    batch_size=16 # number of OM instances per job
+    # number of job in array = N / batch_size
+    # if batch_size = cpus_per_task then one OM instance = one CPU = faster
+    # if batch_size > cpus_per_task then multiple OM instances per cpus = slower but less Slurm jobs
+    # just leave it 16 / 16, 32 / 32, 64 / 64
+    # if more than 500k jobs then 64 / 128 or 64 / 256 
 )
 
 # OpenMalaria
 om = list(
-    version = 45,
-    path = "/scicore/home/penny/GROUP/OpenMalaria/OM_schema45/"
+    version = 48,
+    path = "/scicore/home/chitnis/GROUP/openMalaria-48"
 )
 
 # Scaffold xmls to use
 scaffolds = list(
-    "R0000GA"
+    "scaffolds/default.xml"
 )
 
 # run scenarios, extract the data, or both
@@ -34,32 +43,24 @@ do = list(
     example = TRUE
 )
 
-experiment = 'test' # name of the experiment folder
+experiment = 'output' # name of the experiment folder
 
 # Fixed parameters for all xmls
 pop_size = 10000 # number of humans
 start_year = 2000 # start of the monitoring period
 end_year = 2020 # end of the monitoring period
-burn_in = start_year - 30 # additional burn in time
-access = 0.2029544 # 5-day probability of access to care
-outdoor = 0.2
-indoor = 1.0 - outdoor
+burn_in = start_year - 50 # additional burn in time
 
 # Varying parameters (combinatorial experiment)
 seeds = 10
-modes = c("perennial", "seasonal")
 eirs = c(5, 10, 15, 20, 40, 60, 80, 100, 150, 200)
+accesses = c(0.04, 0.20)
 
-# For a quick test
-# pop_size = 2000
-# seeds = 3
-# modes = c("perennial")
-# eirs = c(5, 20, 50, 100, 200)
-
-# Define functional form of non-perennial seasonal setting
-season_daily = 1 + sin(2 * pi * ((1 : 365) / 365))
-season_month = season_daily[round(1 + seq(0, 365, length.out = 13))[-13]]
-season_month = season_month / max(season_month)
+# Override for a quick test
+pop_size = 2000
+seeds = 3
+eirs = c(5, 20)
+accesses = c(0.04)
 
 # Return a list of scenarios
 create_scenarios <- function()
@@ -68,43 +69,37 @@ create_scenarios <- function()
     scenarios = list()
     for(scaffold in scaffolds)
     {
-        xml = readLines(paste0("scaffolds/", scaffold, ".xml"))
+        xml = readLines(scaffold)
         xml = gsub(pattern = "@version@", replace = om$version, x = xml)
         xml = gsub(pattern = "@pop_size@", replace = pop_size, x = xml)
         xml = gsub(pattern = "@burn_in@", replace = burn_in, x = xml)
-        xml = gsub(pattern = "@access@", replace = access, x = xml)
         xml = gsub(pattern = "@start_year@", replace = start_year, x = xml)
         xml = gsub(pattern = "@end_year@", replace = end_year, x = xml)
-        xml = gsub(pattern = "@indoor@", replace = indoor, x = xml)
-        xml = gsub(pattern = "@outdoor@", replace = outdoor, x = xml)
         
         for(eir in eirs)
         {
+          for(access in accesses)
+          {
             for(seed in 1:seeds)
             {
-                for(mode in modes)
-                {
-                    scenario = xml
-                    scenario = gsub(pattern = "@seed@", replace = seed, x = scenario)
-                    scenario = gsub(pattern = "@eir@", replace = eir, x = scenario)
-                    
-                    if(mode == "seasonal") seasonality = season_month
-                    else if(mode == "perennial") seasonality = replicate(12, 1)
-                    else message("Error: unknown mode ", mode)
-                    
-                    for(i in 1:12)
-                        scenario = gsub(pattern = paste0("@seasonality", i, "@"), replace = seasonality[i], x = scenario)
-                    
-                    # write xml
-                    writeLines(scenario, con=paste0(experiment, "/xml/", index, ".xml"))
-                    
-                    # add the scenario to the list, only the 'index' field is mandatory, see example at the end
-                    scenario_metadata = list(scaffoldName = scaffold, eir = eir, seed = seed, mode = mode, index = index)
-                    scenarios = append(scenarios, list(scenario_metadata))
-                    
-                    index = index + 1
-                }
+              scenario = xml
+              scenario = gsub(pattern = "@seed@", replace = seed, x = scenario)
+              scenario = gsub(pattern = "@eir@", replace = eir, x = scenario)
+              scenario = gsub(pattern = "@access@", replace = access, x = scenario)
+              
+              # use the right net snippet
+              scenario = gsub(pattern = "@INTERVENTIONS@", replace = "", x = scenario)
+              
+              # write xml
+              writeLines(scenario, con=paste0(experiment, "/xml/", index, ".xml"))
+              
+              # add the scenario to the list, only the 'index' field is mandatory, see example at the end
+              scenario_metadata = list(scaffoldName = scaffold, access = access, eir = eir, seed = seed, index = index)
+              scenarios = append(scenarios, list(scenario_metadata))
+              
+              index = index + 1
             }
+          }
         }
     }
     
@@ -167,11 +162,8 @@ if (do$example == TRUE)
     
     # sum up surveys
     d = d %>% 
-        group_by(index, measure, ageGroup) %>% 
+        group_by(index, measure, survey) %>% 
         summarise(value = sum(value), .groups = 'drop')
-    
-    # adjust nHosts for age_group 0-1
-    d[d$ageGroup == 1 & d$measure == 0, ]['value'] = d[d$ageGroup == 1 & d$measure == 0, ]['value'] * 0.5
     
     # merge with the scenarios to have more metadata
     d = merge(d, scenarios, by = 'index')

@@ -5,40 +5,33 @@ run_scicore <- function(scenarios, experiment, om, sciCORE)
     {
         index = scenario$index
         outputfile = paste0("txt/", scenario$index, ".txt")
-        command = paste0("openMalaria -s xml/", index, ".xml --output ", outputfile)
-        full_command = paste0("export PATH=$PATH:", om$path, " && ", command)
-        commands = append(commands, full_command)
+        command = paste0(om$path, "/", "openMalaria -s xml/", index, ".xml --output ", outputfile)
+        commands = append(commands, command)
     }
     writeLines(as.character(commands), paste0(experiment, "/commands.txt"))
     
-    n = length(scenarios)
+    n <- ceiling(length(scenarios) / sciCORE$batch_size)
     
-    scriptTemplate = readLines("job.sh")
-    
-    maxJobs = 50000
-    start <- 1
-    end <- 1
-    while (end < n) {
-        start <- end
-        end <- min(start+maxJobs, n)
-
-        script = scriptTemplate
-        script = gsub(pattern = "@START@", replace = start, x = script)
-        script = gsub(pattern = "@END@", replace = end, x = script)
-        script = gsub(pattern = "@account@", replace = sciCORE$account, x = script)
-        script = gsub(pattern = "@jobname@", replace = sciCORE$jobName, x = script)
-        writeLines(script, con=paste0(experiment, "/start_array_job_", start, "_", end, ".sh"))
-        
-        message("Launching array job from ", start, " to ", end)
-        system(paste0("cd ", experiment, " && sbatch --wait start_array_job_", start, "_", end, ".sh"))
-    }
+    script = readLines("job.sh")
+    script = gsub(pattern = "@N@", replace = n, x = script)
+    script = gsub(pattern = "@account@", replace = sciCORE$account, x = script)
+    script = gsub(pattern = "@jobname@", replace = sciCORE$jobName, x = script)
+    script = gsub(pattern = "@qos@", replace = sciCORE$qos, x = script)
+    script = gsub(pattern = "@time@", replace = sciCORE$time, x = script)
+    script = gsub(pattern = "@CPUS_PER_TASK@", replace = sciCORE$cpus_per_task, x = script)
+    script = gsub(pattern = "@BATCH_SIZE@", replace = sciCORE$batch_size, x = script)
+    writeLines(script, con=paste0(experiment, "/start_array_job.sh"))
+      
+    message("Submitted ", n, " jobs")
+    system(paste0("cd ", experiment, " && sbatch --wait start_array_job.sh"))
 }
 
 run_local <- function(scenarios, experiment, om)
 {
     n = length(scenarios)
+    n_cores <- as.numeric(system("nproc", intern = TRUE))
+    message("Running ", n, " scenarios on ", n_cores, " cores")
     
-    n_cores = detectCores() - 1
     registerDoParallel(n_cores)
     cluster = makeCluster(n_cores, type="FORK")  
     registerDoParallel(cluster)  
@@ -48,9 +41,9 @@ run_local <- function(scenarios, experiment, om)
         index = scenario$index
         
         outputfile = paste0("txt/", scenario$index, ".txt")
-        command = paste0("openMalaria -s xml/", index, ".xml --output ", outputfile)
-        full_command = paste0("export PATH=$PATH:", om$path, " && cd ", experiment, " && ", command)
-        system(full_command, ignore.stdout = TRUE, ignore.stderr = TRUE)
+        command = paste0(om$path, "/", "openMalaria -s xml/", index, ".xml --output ", outputfile)
+        full_command = paste0("cd ", experiment, " && ", command)
+        system(full_command)#, ignore.stdout = TRUE, ignore.stderr = TRUE)
         NULL
     }
     
