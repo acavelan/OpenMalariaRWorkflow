@@ -28,7 +28,8 @@ sciCORE = list(
 # OpenMalaria
 om = list(
     version = 48,
-    path = "/scicore/home/chitnis/GROUP/openMalaria-48"
+    # path = "/scicore/home/chitnis/GROUP/openMalaria-48"
+    path = "/home/acavelan/git/fork/openMalaria-48.0"
 )
 
 # Scaffold xmls to use
@@ -43,7 +44,7 @@ do = list(
     example = TRUE
 )
 
-experiment = 'output' # name of the experiment folder
+output = 'output' # name of the output folder
 
 # Fixed parameters for all xmls
 pop_size = 10000 # number of humans
@@ -51,7 +52,7 @@ start_year = 2000 # start of the monitoring period
 end_year = 2020 # end of the monitoring period
 burn_in = start_year - 50 # additional burn in time
 
-# Varying parameters (combinatorial experiment)
+# Varying parameters (combinatorial output)
 seeds = 10
 eirs = c(5, 10, 15, 20, 40, 60, 80, 100, 150, 200)
 accesses = c(0.04, 0.20)
@@ -91,7 +92,7 @@ create_scenarios <- function()
               scenario = gsub(pattern = "@INTERVENTIONS@", replace = "", x = scenario)
               
               # write xml
-              writeLines(scenario, con=paste0(experiment, "/xml/", index, ".xml"))
+              writeLines(scenario, con=paste0(output, "/xml/", index, ".xml"))
               
               # add the scenario to the list, only the 'index' field is mandatory, see example at the end
               scenario_metadata = list(scaffoldName = scaffold, access = access, eir = eir, seed = seed, index = index)
@@ -109,29 +110,33 @@ create_scenarios <- function()
 if (do$run == TRUE)
 {
     message("Cleaning Tree...")
-    unlink(experiment, recursive=TRUE)
-    dir.create(experiment)
-    dir.create(paste0(experiment, "/xml"))
-    dir.create(paste0(experiment, "/txt"))
-    dir.create(paste0(experiment, "/fig"))
-    dir.create(paste0(experiment, "/log"))
+    unlink(output, recursive=TRUE)
+    dir.create(output)
+    dir.create(paste0(output, "/xml"))
+    dir.create(paste0(output, "/txt"))
+    dir.create(paste0(output, "/fig"))
+    dir.create(paste0(output, "/log"))
     
     message("Creating scenarios...")
     scenarios = create_scenarios()
-    fwrite(rbindlist(scenarios), paste0(experiment, "/scenarios.csv"))
+    fwrite(rbindlist(scenarios), paste0(output, "/scenarios.csv"))
+    
+    message("Creating commands...")
+    commands = create_commands(scenarios, output)
     
     message("Running scenarios...")
-    run_scenarios(scenarios, experiment, om, sciCORE)
+    # run_scicore(commands, output, om, sciCORE)
+    run_local(commands, output, om)
 }
 
 if (do$extract == TRUE)
 {
     message("Extracting results...")
-    unlink(paste0(experiment, "/output.csv"))
-    scenarios = fread(paste0(experiment, "/scenarios.csv"))
+    unlink(paste0(output, "/output.csv"))
+    scenarios = fread(paste0(output, "/scenarios.csv"))
     
     start.time <- Sys.time()
-    df = to_df(scenarios, experiment)
+    df = to_df(scenarios, output)
     end.time <- Sys.time()
     time.taken <- end.time - start.time
     message("Extract time: ", time.taken)
@@ -142,7 +147,7 @@ if (do$extract == TRUE)
     }
     else {
         start.time <- Sys.time()
-        fwrite(df, paste0(experiment, "/output.csv"))
+        fwrite(df, paste0(output, "/output.csv"))
         end.time <- Sys.time()
         time.taken <- end.time - start.time
         message("Write time: ", time.taken)
@@ -151,8 +156,8 @@ if (do$extract == TRUE)
 
 if (do$example == TRUE)
 {
-    scenarios = fread(paste0(experiment, "/scenarios.csv"))
-    d = fread(paste0(experiment, "/output.csv"))
+    scenarios = fread(paste0(output, "/scenarios.csv"))
+    d = fread(paste0(output, "/output.csv"))
     
     # remove NA values
     d = d[complete.cases(d), ]
