@@ -41,20 +41,35 @@ run_scicore <- function(commands, output, om, sciCORE)
 
 run_local <- function(commands, output, om)
 {
-    prepare(output, om)
+  prepare(output, om)
   
-    n = length(commands)
-    n_cores = parallel::detectCores()
+  n <- length(commands)
+  n_cores <- parallel::detectCores()
+  
+  message("Running ", n, " scenarios on ", n_cores, " cores")
+  
+  cluster <- makeCluster(n_cores)
+  registerDoParallel(cluster)
+  
+  results <- foreach(i = seq_along(commands), .combine = 'c') %dopar% {
+    cmd <- commands[[i]]
+    oldwd <- setwd(output); on.exit(setwd(oldwd), add = TRUE)
     
-    message("Running ", n, " scenarios on ", n_cores, " cores")
+    logfile <- file.path("log", paste0("job_", i, ".log"))
     
-    cluster = makeCluster(n_cores)  
-    registerDoParallel(cluster)  
+    shell <- if (.Platform$OS.type == "windows") "cmd" else "bash"
+    flag  <- if (.Platform$OS.type == "windows") "/c"  else "-c"
     
-    foreach::foreach(cmd = commands, .combine = 'c') %dopar% {
-      system(paste0("cd ", output, " && ", cmd))
-      NULL
-    }
+    # Must quote entire command string for redirection to work
+    cmd_full <- paste(cmd, ">", shQuote(logfile), "2>&1")
+    exitcode <- system2(shell, paste(flag, shQuote(cmd_full)), stdout = NULL, stderr = NULL, wait = TRUE)
     
-    stopCluster(cluster)
+    if (exitcode != 0) {
+      msg = paste0("Error in task ", i, ": ", cmd, "\n  See log: ", logfile)
+      msg
+    } else NULL
+  }
+  
+  stopCluster(cluster)
+  cat(paste(results, collapse = "\n"))
 }
