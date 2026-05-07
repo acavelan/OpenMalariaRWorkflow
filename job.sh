@@ -16,7 +16,13 @@ export LMOD_DISABLE_SAME_NAME_AUTOSWAP="no"
 ml parallel
 
 # Prepare environment
-ml OpenMalaria/47.0-intel-compilers-2023.1.0
+# ml OpenMalaria/48.0-intel-compilers-2025.2.0
+ml CMake/4.0.3-GCCcore-14.3.0
+ml GCCcore/14.3.0
+ml intel-compilers/2025.2.0
+ml GSL/2.8-intel-compilers-2025.2.0 
+ml Xerces-C++/3.3.0-GCCcore-14.3.0
+ml XSD/4.0.0-GCCcore-14.3.0
 
 # Define the seed file
 SEEDFILE="commands.txt"

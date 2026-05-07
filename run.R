@@ -46,12 +46,7 @@ run_local <- function(commands, output, om)
   n <- length(commands)
   n_cores <- parallel::detectCores()
   
-  message("Running ", n, " scenarios on ", n_cores, " cores")
-  
-  cluster <- makeCluster(n_cores)
-  registerDoParallel(cluster)
-  
-  results <- foreach(i = seq_along(commands), .combine = 'c') %dopar% {
+  run_command <- function(i) {
     cmd <- commands[[i]]
     oldwd <- setwd(output); on.exit(setwd(oldwd), add = TRUE)
     
@@ -70,6 +65,35 @@ run_local <- function(commands, output, om)
     } else NULL
   }
   
-  stopCluster(cluster)
+  if (.Platform$OS.type != "windows") {
+    message("Running ", n, " scenarios on ", n_cores, " cores using forked workers")
+    results <- unlist(
+      parallel::mclapply(
+        seq_along(commands),
+        run_command,
+        mc.cores = n_cores,
+        mc.preschedule = FALSE
+      ),
+      use.names = FALSE
+    )
+  } else {
+    message("Running ", n, " scenarios on ", n_cores, " cores")
+    cluster <- tryCatch(
+      makeCluster(n_cores),
+      error = function(e) {
+        message("Parallel startup failed, falling back to serial execution: ", e$message)
+        NULL
+      }
+    )
+    
+    if (!is.null(cluster)) {
+      on.exit(stopCluster(cluster), add = TRUE)
+      registerDoParallel(cluster)
+      results <- foreach(i = seq_along(commands), .combine = 'c') %dopar% run_command(i)
+    } else {
+      results <- unlist(lapply(seq_along(commands), run_command), use.names = FALSE)
+    }
+  }
+  
   cat(paste(results, collapse = "\n"))
 }
