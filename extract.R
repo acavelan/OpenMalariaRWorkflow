@@ -1,14 +1,65 @@
-to_df <- function(scenarios, experiment)
+read_uint64 <- function(bytes) {
+  sum(as.double(bytes) * 256^(0:7))
+}
+
+read_monitoring_binary <- function(path) {
+  con <- if (endsWith(path, ".gz")) gzfile(path, "rb") else file(path, "rb")
+  on.exit(close(con))
+
+  header <- readBin(con, raw(), 28L)
+  if (length(header) != 28L) stop("Truncated binary output: ", path)
+
+  magic <- header[1:8]
+  version <- readBin(header[9:12], integer(), 1L, 4L, endian = "little")
+  integer_rows <- read_uint64(header[13:20])
+  double_rows <- read_uint64(header[21:28])
+
+  if (!identical(magic, charToRaw("OMOUTBIN")) || version != 2L) {
+    stop("Unsupported OpenMalaria binary format: ", path)
+  }
+
+  rows <- integer_rows + double_rows
+  result <- list(
+    survey = readBin(con, integer(), rows, 4L, endian = "little"),
+    ageGroup = readBin(con, integer(), rows, 4L, endian = "little"),
+    measure = readBin(con, integer(), rows, 4L, endian = "little"),
+    value = c(
+      readBin(con, integer(), integer_rows, 4L, endian = "little"),
+      readBin(con, double(), double_rows, 8L, endian = "little")
+    )
+  )
+
+  data.table::setDT(result)
+  if (nrow(result) != rows || length(readBin(con, raw(), 1L))) {
+    stop("Invalid binary output size: ", path)
+  }
+  result
+}
+
+read_monitoring_output <- function(path) {
+  if (grepl("\\.bin(\\.gz)?$", path)) {
+    read_monitoring_binary(path)
+  } else {
+    data.table::fread(path, sep = "\t", header = FALSE,
+                      col.names = c("survey", "ageGroup", "measure", "value"))
+  }
+}
+
+to_df <- function(scenarios, experiment_folder)
 {
     infoCount = 0
     maxInfoCount = 100
     n = nrow(scenarios)
     data = list()
 
-    for (row in 1:n)
+    for (row in seq_len(n))
     {
-        index <- scenarios[row, "index"]
-        f = paste0(experiment, "/txt/", index, ".txt")
+        index <- scenarios$index[row]
+        f <- if ("outputFile" %in% names(scenarios)) {
+            file.path(experiment_folder, scenarios[row, "outputFile"][[1]])
+        } else {
+            file.path(experiment_folder, "txt", paste0(index, ".txt"))
+        }
         if(file.exists(f) == FALSE) {
             if(infoCount < maxInfoCount) {
                 message("Warning: File ", f, " is missing")
@@ -19,7 +70,7 @@ to_df <- function(scenarios, experiment)
             infoCount <- infoCount + 1
         }
         else {
-            d = fread(f, sep = "\t", header = FALSE)
+            d = read_monitoring_output(f)
             d[,'index'] = index
             data[[row]] <- d
         }

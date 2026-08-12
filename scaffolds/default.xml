@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<om:scenario xmlns:om="http://openmalaria.org/schema/scenario_@version@" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="R0000" schemaVersion="@version@" xsi:schemaLocation="http://openmalaria.org/schema/scenario_@version@ scenario_@version@.xsd">
-    <demography maximumAgeYrs="90" name="Ifakara" popSize="@pop_size@">
+<om:scenario xmlns:om="http://openmalaria.org/schema/scenario_49" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="R0000" schemaVersion="49" xsi:schemaLocation="http://openmalaria.org/schema/scenario_49 scenario_49.xsd">
+    <demography maximumAgeYrs="90" name="Ifakara" popSize="10000">
         <ageGroup lowerbound="0">
             <group poppercent="3.474714994" upperbound="1"/>
             <group poppercent="12.76004028" upperbound="5"/>
@@ -23,7 +23,7 @@
             <group poppercent="0.161614642" upperbound="90"/>
         </ageGroup>
     </demography>
-    <monitoring name="monthly surveys" startDate="@burn_in@-01-01">
+    <monitoring name="monthly surveys" startDate="1950-01-01">
         <SurveyOptions>
             <option name="nHost"/>          <!-- id 0 -->
             <option name="nInfect"/>        <!-- id 1 -->
@@ -33,7 +33,7 @@
             <option name="simulatedEIR"/>   <!-- id 36 -->
         </SurveyOptions>
         <surveys diagnostic="deterministic">
-          <surveyTime repeatStep="1y" repeatEnd="@end_year@-01-01">@start_year@-01-01</surveyTime>
+          <surveyTime repeatStep="1y" repeatEnd="2020-01-01">2000-01-01</surveyTime>
         </surveys>
         <ageGroup lowerbound="0">
           <group upperbound="0.5"/>
@@ -47,15 +47,14 @@
         </ageGroup>
     </monitoring>
     <interventions name="No interventions">
-      @INTERVENTIONS@
     </interventions>
     <healthSystem>
         <!-- The more flexible DecisionTree5Day replaces the older ImmediateOutcomes. 
         The probabilities below are greatly affected by the presence (or the absence) of a clinic or hospital on site -->
         <DecisionTree5Day name="example name">
-            <pSeekOfficialCareUncomplicated1 value="@access@"/><!-- 5-day probability that a patient uncomplicated case seeks official care -->
+            <pSeekOfficialCareUncomplicated1 value="0.04"/><!-- 5-day probability that a patient uncomplicated case seeks official care -->
             <pSelfTreatUncomplicated value="0.0"/><!-- 5-day probability that a patient with uncomplicated case will self-treat -->
-            <pSeekOfficialCareUncomplicated2 value="@access@"/><!-- 5-day probability that a patient with recurrence seeks official care -->
+            <pSeekOfficialCareUncomplicated2 value="0.04"/><!-- 5-day probability that a patient with recurrence seeks official care -->
             <pSeekOfficialCareSevere value="0.48"/><!-- 5-day probability that a patient with severe case seeks official care -->
             <!-- Value 0.48 used in Tediosi et al., 2006 for reference scenario -->
             <treeUCOfficial>
@@ -93,9 +92,9 @@
             <group lowerbound="5.0" value="0.005"/>
         </pSequelaeInpatient>
     </healthSystem>
-    <entomology mode="dynamic" name="Namawala" scaledAnnualEIR="@eir@">
+    <entomology mode="dynamic" name="Namawala" scaledAnnualEIR="5">
         <vector>
-            <anopheles mosquito="gambiae" propInfected="0.078" propInfectious="0.021">
+            <anopheles mosquito="gambiae">
                 <seasonality annualEIR="1" input="EIR"> 
                     <fourierSeries EIRRotateAngle="0">
                         <coeffic a="0" b="0"/>
@@ -165,6 +164,6 @@
             </availabilityToMosquitoes>
         </human>
 
-        <computationParameters iseed="@seed@"/>
+        <computationParameters iseed="1"/>
    </model>
 </om:scenario>

@@ -51,6 +51,6 @@ initial_access
 new_access <- round(pmax(convert_access(initial_access * 100), 0.04), digits = 4) # output 5 day prob
 new_access
 
-# additional code lines to add to launch.R if using:
+# additional code lines to add to main.R if using:
 # # Convert access to care to 5 day probabilties for use in xml files
 # param_df$access = pmax(convert_access(param_df$access * 100), 0.04)
