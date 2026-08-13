@@ -31,20 +31,26 @@ experiment_folder = "experiment"
 
 scenarios <- s(
     "scaffolds/default.xml",
-    "demography/@popSize", 1000,
-    "monitoring/@startDate", "1950-01-01", # 50 years burnin (start date - 50 years)
-    "monitoring/surveys/surveyTime", "2000-01-01", # start date
-    "monitoring/surveys/surveyTime/@repeatStep", "5d", # survey every 5d (1y is also common)
-    "monitoring/surveys/surveyTime/@repeatEnd", "2020-01-01", # end date
-    "entomology/@scaledAnnualEIR", vary(eir = c(5, 20)),
-    "healthSystem/DecisionTree5Day/pSeekOfficialCareUncomplicated1/@value", vary(access = 0.04),
-    "healthSystem/DecisionTree5Day/pSeekOfficialCareUncomplicated2/@value", vary(access = 0.04),
-    "model/computationParameters/@iseed", vary(seed = 1:3)
+    "demography/@popSize" = 1000,
+    "monitoring/@startDate" = "1950-01-01", # 50 years burnin (start date - 50 years)
+    "monitoring/surveys/surveyTime" = "2000-01-01", # start date
+    "monitoring/surveys/surveyTime/@repeatStep" = "5d", # survey every 5d (1y is also common)
+    "monitoring/surveys/surveyTime/@repeatEnd" = "2020-01-01", # end date
+    "interventions/@name" = "GVI example",
+    "interventions" = xml_new_root("human"),
+    "interventions/human" = read_xml("snippets/GVI.component.xml"),
+    "interventions/human" = read_xml("snippets/GVI.deployment.xml"),
+    "interventions/human/deployment[@name='GVI_example']/timed/deploy/@coverage" = 0.7,
+    "entomology/@scaledAnnualEIR" = list(eir = c(5, 20)),
+    "healthSystem/DecisionTree5Day/pSeekOfficialCareUncomplicated1/@value" = list(access = 0.04),
+    "healthSystem/DecisionTree5Day/pSeekOfficialCareUncomplicated2/@value" = list(access = 0.04),
+    "model/computationParameters/@iseed" = list(seed = 1:3)
 )
 
-# TOGGLE
-#scenarios <- run(scenarios, experiment_folder, om) #, slurm) # run the scenarios and create scenarios.csv
-#df <- extract(scenarios, experiment_folder) # extract the data to output.csv
+# Run scenarios, extract the data
+scenarios <- write_scenarios(scenarios, experiment_folder, om, overwrite = TRUE) # write XML and expand the scenario table
+run(scenarios, experiment_folder, om, overwrite = TRUE) # add slurm = slurm to run on Slurm
+df <- extract(scenarios, experiment_folder, overwrite = TRUE) # extract the data to output.csv
 
 # Example plotting 
 ##################
@@ -57,7 +63,7 @@ d = df[complete.cases(df), ] # remove NA values
 d = d[!d$survey == 1,] # remove first survey
 d = d[, .(value = sum(value)), by = .(index, measure, survey)] # aggregate age-groups
 
-# merge with the scenarios.csv to have all the metadata (eir, access, seed, etc.) in the same data.table
+# merge with the scenarios table to have all the metadata (eir, access, seed, etc.) in the same data.table
 d = merge(d, scenarios, by = 'index')
 setorder(d, eir, seed, survey, measure)
 

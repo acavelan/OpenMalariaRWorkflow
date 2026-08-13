@@ -1,106 +1,72 @@
-vary <- function(...) {
-  x <- list(...)
-  if (length(x) != 1 || is.null(names(x)) || names(x) == "") {
-    stop("Use vary(name = values), e.g. vary(eir = c(5, 20))")
-  }
-  structure(x[[1]], vary = names(x))
-}
+is_xml <- function(x) inherits(x, c("xml_node", "xml_nodeset"))
 
 s <- function(scaffold, ...) {
-  x <- list(...)
-  if (length(x) %% 2 != 0) stop("Scenarios must be xpath/value pairs")
+  replacements <- list(...)
+  if (length(replacements) && (is.null(names(replacements)) || any(!nzchar(names(replacements))))) {
+    stop('Name each replacement with its XPath, e.g. "demography/@popSize" = 200')
+  }
+  valid <- function(x) is_xml(x) || length(x) == 1 &&
+    (!is.list(x) || length(names(x)) == 1 && nzchar(names(x)) && length(x[[1]]) > 0)
+  if (!all(vapply(replacements, valid, logical(1)))) {
+    stop("Use scalar or XML fixed values, or list(name = values) for varying values")
+  }
+  list(scaffold = scaffold, replacements = replacements)
+}
 
-  replacements <- data.frame(
-    xpath = unlist(x[c(TRUE, FALSE)], use.names = FALSE),
-    id = seq_len(length(x) / 2),
+write_scenarios <- function(spec, experiment_folder, om, overwrite = FALSE, VALIDATE_XML = TRUE) {
+  variables <- do.call(c, unname(Filter(function(x) is.list(x) && !is_xml(x), spec$replacements)))
+  variables <- variables[!duplicated(names(variables), fromLast = TRUE)]
+  scenarios <- data.table::as.data.table(expand.grid(
+    c(variables, list(scaffoldName = spec$scaffold)),
+    KEEP.OUT.ATTRS = FALSE,
     stringsAsFactors = FALSE
-  )
-  values <- x[c(FALSE, TRUE)]
+  ))
+  scenarios$index <- seq_len(nrow(scenarios))
+  if (VALIDATE_XML) schema <- xml2::read_xml(file.path(om$path, paste0("scenario_", om$version, ".xsd")))
 
-  vars <- list()
-  for (value in values) {
-    name <- attr(value, "vary", exact = TRUE)
-    if (!is.null(name)) vars[[name]] <- value
+  xml_folder <- file.path(experiment_folder, "xml")
+  if (file.exists(xml_folder) && !overwrite) {
+    stop("XML folder already exists: ", xml_folder, ". Use overwrite = TRUE to replace it.")
   }
+  if (overwrite && unlink(xml_folder, recursive = TRUE)) stop("Could not remove: ", xml_folder)
+  if (!dir.create(xml_folder, recursive = TRUE)) stop("Could not create: ", xml_folder)
 
-  grid <- if (length(vars)) expand.grid(vars, KEEP.OUT.ATTRS = FALSE) else data.frame(.fixed = 1)
-  rows <- vector("list", nrow(grid))
+  for (row in seq_len(nrow(scenarios))) {
+    index <- scenarios$index[row]
+    doc <- xml2::read_xml(scenarios$scaffoldName[row])
+    root <- xml2::xml_root(doc)
+    xml2::xml_set_attr(root, "schemaVersion", om$version)
+    xml2::xml_set_attr(root, "xsi:schemaLocation", paste0(
+      "http://openmalaria.org/schema/scenario_", om$version,
+      " scenario_", om$version, ".xsd"
+    ))
 
-  for (i in seq_len(nrow(grid))) {
-    scenario <- replacements
-    scenario$value <- vapply(values, function(value) {
-      name <- attr(value, "vary", exact = TRUE)
-      as.character(if (is.null(name)) value else grid[[name]][i])
-    }, character(1))
-    rows[[i]] <- list(scaffold = scaffold, meta = grid[i, names(vars), drop = FALSE], replacements = scenario)
-  }
+    for (replacement in seq_along(spec$replacements)) {
+      path <- names(spec$replacements)[replacement]
+      value <- spec$replacements[[replacement]]
+      if (is.list(value) && !is_xml(value)) value <- scenarios[[names(value)]][row]
 
-  rows
-}
+      nodes <- xml2::xml_find_all(root, path, xml2::xml_ns(doc))
+      if (!length(nodes)) stop("XPath did not match: ", path)
 
-plain_xpath <- function(path) {
-  parts <- strsplit(path, "/", fixed = TRUE)[[1]]
-  parts <- parts[nzchar(parts)]
-  xpath <- "/*[local-name()='scenario']"
-
-  for (part in parts) {
-    if (startsWith(part, "@")) {
-      xpath <- paste0(xpath, "/", part)
-    } else {
-      xpath <- paste0(xpath, "/*[local-name()='", part, "']")
-    }
-  }
-
-  xpath
-}
-
-set_xml_value <- function(doc, path, value) {
-  if (startsWith(path, "@")) {
-    xml2::xml_set_attr(xml2::xml_root(doc), sub("^@", "", path), value)
-    return(invisible(doc))
-  }
-
-  nodes <- xml2::xml_find_all(doc, plain_xpath(path))
-  if (length(nodes) == 0) stop("XPath did not match: ", path)
-
-  if (grepl("/@", path, fixed = TRUE) || startsWith(path, "@")) {
-    attr <- sub("^.*@", "", path)
-    xml2::xml_set_attr(xml2::xml_parent(nodes), attr, value)
-  } else {
-    xml2::xml_set_text(nodes, value)
-  }
-
-  invisible(doc)
-}
-
-write_scenarios <- function(spec, experiment_folder, om) {
-  if (!om$output_format %in% c("bin", "bin.gz", "txt", "txt.gz")) stop("Unknown output_format: ", om$output_format)
-
-  index <- 1L
-  scenarios <- list()
-
-  for (item in spec) {
-    for (scaffold in item$scaffold) {
-      doc <- xml2::read_xml(scaffold)
-      set_xml_value(doc, "@schemaVersion", om$version)
-      set_xml_value(doc, "@xsi:schemaLocation", paste0(
-        "http://openmalaria.org/schema/scenario_", om$version,
-        " scenario_", om$version, ".xsd"
-      ))
-
-      for (row in seq_len(nrow(item$replacements))) {
-        set_xml_value(doc, item$replacements$xpath[row], item$replacements$value[row])
+      if (is_xml(value)) {
+        if (xml2::xml_type(nodes[[1]]) == "attribute") stop("Cannot add XML to an attribute: ", path)
+        children <- if (inherits(value, "xml_nodeset")) value else list(value)
+        for (child in children) xml2::xml_add_child(nodes, child)
+      } else if (xml2::xml_type(nodes[[1]]) == "attribute") {
+        xml2::xml_set_attr(xml2::xml_parent(nodes), xml2::xml_name(nodes[[1]]), value)
+      } else {
+        xml2::xml_set_text(nodes, value)
       }
-
-      xml2::write_xml(doc, file.path(experiment_folder, "xml", paste0(index, ".xml")))
-      meta <- item$meta
-      meta$scaffoldName <- scaffold
-      meta$index <- index
-      meta$outputFile <- file.path("out", paste0(index, ".", om$output_format))
-      scenarios[[index]] <- meta
-      index <- index + 1L
     }
+
+    if (VALIDATE_XML) {
+      valid <- xml2::xml_validate(doc, schema)
+      if (!valid) stop("Invalid scenario ", index, ":\n", paste(attr(valid, "errors"), collapse = "\n"))
+    }
+    xml2::write_xml(doc, file.path(experiment_folder, "xml", paste0(index, ".xml")))
   }
 
-  data.table::rbindlist(scenarios, fill = TRUE)
+  message(nrow(scenarios), " scenarios created")
+  scenarios
 }

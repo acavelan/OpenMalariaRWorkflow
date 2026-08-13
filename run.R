@@ -1,7 +1,7 @@
 prepare <- function(experiment_folder, om)
 {
-    file.copy(file.path(om$path, "densities.csv"), experiment_folder)
-    file.copy(file.path(om$path, paste0("scenario_", om$version, ".xsd")), experiment_folder)
+    file.copy(file.path(om$path, "densities.csv"), experiment_folder, overwrite=TRUE)
+    file.copy(file.path(om$path, paste0("scenario_", om$version, ".xsd")), experiment_folder, overwrite=TRUE)
 }
 
 create_commands <- function(scenarios, experiment_folder, om)
@@ -30,16 +30,22 @@ create_commands <- function(scenarios, experiment_folder, om)
     commands
 }
 
-run <- function(scenarios, experiment_folder, om, slurm = NULL)
+run <- function(scenarios, experiment_folder, om, slurm = NULL, overwrite = FALSE)
 {
-    message("Cleaning Tree...")
-    unlink(experiment_folder, recursive=TRUE)
-    dir.create(file.path(experiment_folder, "xml"), recursive=TRUE)
-    dir.create(file.path(experiment_folder, "out"))
-    dir.create(file.path(experiment_folder, "log"))
-    
-    message("Creating scenarios...")
-    scenarios = write_scenarios(scenarios, experiment_folder, om)
+    if (!om$output_format %in% c("bin", "bin.gz", "txt", "txt.gz")) stop("Unknown output_format: ", om$output_format)
+
+    xml_files = file.path(experiment_folder, "xml", paste0(scenarios$index, ".xml"))
+    if (!all(file.exists(xml_files))) stop("Scenario XML files are missing. Run write_scenarios() first.")
+
+    folders = file.path(experiment_folder, c("out", "log"))
+    existing = folders[file.exists(folders)]
+    if (length(existing) && !overwrite) {
+        stop("Output folders already exist: ", paste(existing, collapse = ", "), ". Use overwrite = TRUE to replace them.")
+    }
+    if (overwrite && unlink(folders, recursive=TRUE)) stop("Could not remove output folders")
+    if (!all(vapply(folders, dir.create, logical(1), recursive=TRUE))) stop("Could not create output folders")
+
+    scenarios$outputFile = file.path("out", paste0(scenarios$index, ".", om$output_format))
     fwrite(scenarios, file.path(experiment_folder, "scenarios.csv"))
     
     message("Creating commands...")
@@ -47,14 +53,13 @@ run <- function(scenarios, experiment_folder, om, slurm = NULL)
     
     message("Running scenarios...")
     if (is.null(slurm)) run_local(commands, experiment_folder, om) else run_slurm(commands, experiment_folder, om, slurm)
-    
-    invisible(scenarios)
 }
 
-extract <- function(scenarios, experiment_folder)
+extract <- function(scenarios, experiment_folder, overwrite = FALSE)
 {
     message("Extracting results...")
-    unlink(file.path(experiment_folder, "output.csv"))
+    output_file = file.path(experiment_folder, "output.csv")
+    if (file.exists(output_file) && !overwrite) stop("Output file already exists: ", output_file, ". Use overwrite = TRUE to replace it.")
     
     if (!"outputFile" %in% names(scenarios)) {
         scenarios = fread(file.path(experiment_folder, "scenarios.csv"))
@@ -72,7 +77,7 @@ extract <- function(scenarios, experiment_folder)
     }
     else {
         start.time <- Sys.time()
-        fwrite(df, file.path(experiment_folder, "output.csv"))
+        fwrite(df, output_file)
         end.time <- Sys.time()
         time.taken <- end.time - start.time
         message("Write time: ", time.taken)
