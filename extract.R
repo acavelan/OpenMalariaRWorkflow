@@ -86,9 +86,6 @@ to_df <- function(scenarios, experiment_folder)
         message("Error: Dataframe is empty because no outputs were found")
         message("       Check the log files and make sure OpenMalaria is able to run")
     }
-    else {
-        colnames(data) <- c('survey', 'ageGroup', 'measure', 'value', 'index')
-    }
-    
-    return(data)
+
+    data
 }
