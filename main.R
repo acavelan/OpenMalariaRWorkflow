@@ -50,9 +50,9 @@ scenarios <- s(
 )
 
 # Run scenarios, extract the data
-scenarios <- write_scenarios(scenarios, experiment_folder, om, overwrite = TRUE) # write XML scenario and scenarios.csv
-run(scenarios, experiment_folder, om, slurm, overwrite = TRUE) # run scenarios
-df <- extract(scenarios, experiment_folder, overwrite = TRUE) # extract the data to output.csv
+scenarios <- write_scenarios(scenarios, experiment_folder, om, overwrite = FALSE) # write XML scenario and scenarios.csv
+run(scenarios, experiment_folder, om, slurm, overwrite = FALSE) # run scenarios
+df <- extract(scenarios, experiment_folder, overwrite = FALSE) # extract the data to output.csv
 
 # Example plotting 
 ##################
