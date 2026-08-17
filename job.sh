@@ -15,6 +15,12 @@ export LMOD_DISABLE_SAME_NAME_AUTOSWAP="no"
 
 module load parallel
 
+# Version 49.0
+ml GCCcore/14.3.0
+ml intel-compilers/2025.2.0
+ml GSL/2.8-intel-compilers-2025.2.0 
+ml Xerces-C++/3.3.0-GCCcore-14.3.0
+
 SEEDFILE="commands.txt"
 START=$(( (SLURM_ARRAY_TASK_ID - 1) * @BATCH_SIZE@ + 1 ))
 END=$(( SLURM_ARRAY_TASK_ID * @BATCH_SIZE@ ))
