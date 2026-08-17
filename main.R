@@ -1,3 +1,4 @@
+# Session -> Set Working Directory -> To Source File Location
 source("pacman.R")
 source("scenarios.R")
 source("extract.R")
@@ -20,6 +21,7 @@ slurm = list(
     # just leave it 16 / 16, 32 / 32, 64 / 64
     # if more than 53.60 ms00k jobs then 64 / 128 or 64 / 256
 )
+if (!nzchar(Sys.which("sbatch"))) slurm <- NULL # slurm = NULL if not available, e.g. running on a laptop
 
 om = list(
     version = 49,
@@ -49,7 +51,7 @@ scenarios <- s(
 
 # Run scenarios, extract the data
 scenarios <- write_scenarios(scenarios, experiment_folder, om, overwrite = TRUE) # write XML and expand the scenario table
-run(scenarios, experiment_folder, om, overwrite = TRUE) # add slurm = slurm to run on Slurm
+run(scenarios, experiment_folder, om, slurm, overwrite = TRUE)
 df <- extract(scenarios, experiment_folder, overwrite = TRUE) # extract the data to output.csv
 
 # Example plotting 
@@ -80,12 +82,12 @@ incidence = copy(nUncomp)
 incidence[, value := nUncomp$value / nHost$value]
 
 p_prevalence = ggplot(prevalence, aes(survey, value, color = factor(eir), group = eir)) +
-    stat_summary(fun = mean, geom = "line", linewidth = 1) +
+    stat_summary(fun = mean, geom = "line") +
     labs(x = "Survey", y = "Prevalence", color = "EIR") +
     theme_minimal(base_size = 14)
 
 p_incidence = ggplot(incidence, aes(survey, value, color = factor(eir), group = eir)) +
-    stat_summary(fun = mean, geom = "line", linewidth = 1) +
+    stat_summary(fun = mean, geom = "line") +
     labs(x = "Survey", y = "Clinical Incidence", color = "EIR") +
     theme_minimal(base_size = 14)
 
@@ -95,7 +97,7 @@ eir = rbind(
 )
 
 p_eir = ggplot(eir, aes(survey, value, color = factor(eir), linetype = type, group = interaction(eir, type))) +
-    stat_summary(fun = mean, geom = "line", linewidth = 1) +
+    stat_summary(fun = mean, geom = "line") +
     labs(x = "Survey", y = "EIR", color = "EIR", linetype = "") +
     theme_minimal(base_size = 14)
 
