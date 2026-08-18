@@ -32,7 +32,7 @@ om = list(
 experiment_folder = "experiment"
 
 scenarios <- s(
-    "scaffolds/default.xml",
+    "snippets/default.xml",
     "demography/@popSize" = 1000,
     "monitoring/@startDate" = "1950-01-01", # 50 years burnin (start date - 50 years)
     "monitoring/surveys/surveyTime" = "2000-01-01", # start date
@@ -62,7 +62,7 @@ scenarios <- fread(file.path(experiment_folder, "scenarios.csv"))
 df <- fread(file.path(experiment_folder, "output.csv"))
 
 d = df[complete.cases(df), ] # remove NA values
-d = d[!d$survey == 1,] # remove first survey
+d = d[!d$survey == 1,] # remove first survey (due to accumulating data during the burn-in period)
 d = d[, .(value = sum(value)), by = .(index, measure, survey)] # aggregate age-groups
 
 # merge with the scenarios table to have all the metadata (eir, access, seed, etc.) in the same data.table
