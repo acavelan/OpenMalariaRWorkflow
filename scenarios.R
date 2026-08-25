@@ -13,7 +13,7 @@ s <- function(scaffold, ...) {
   list(scaffold = scaffold, replacements = replacements)
 }
 
-write_scenarios <- function(spec, experiment_folder, om, overwrite = FALSE, VALIDATE_XML = TRUE) {
+write_scenarios <- function(spec, experiment_folder, om, validate_xml = TRUE, overwrite = FALSE) {
   variables <- do.call(c, unname(Filter(function(x) is.list(x) && !is_xml(x), spec$replacements)))
   variables <- variables[!duplicated(names(variables), fromLast = TRUE)]
   scenarios <- data.table::as.data.table(expand.grid(
@@ -22,7 +22,7 @@ write_scenarios <- function(spec, experiment_folder, om, overwrite = FALSE, VALI
     stringsAsFactors = FALSE
   ))
   scenarios$index <- seq_len(nrow(scenarios))
-  if (VALIDATE_XML) schema <- xml2::read_xml(file.path(om$path, paste0("scenario_", om$version, ".xsd")))
+  if (validate_xml) schema <- xml2::read_xml(file.path(om$path, paste0("scenario_", om$version, ".xsd")))
 
   xml_folder <- file.path(experiment_folder, "xml")
   if (file.exists(xml_folder) && !overwrite) {
@@ -60,7 +60,7 @@ write_scenarios <- function(spec, experiment_folder, om, overwrite = FALSE, VALI
       }
     }
 
-    if (VALIDATE_XML) {
+    if (validate_xml) {
       valid <- xml2::xml_validate(doc, schema)
       if (!valid) stop("Invalid scenario ", index, ":\n", paste(attr(valid, "errors"), collapse = "\n"))
     }

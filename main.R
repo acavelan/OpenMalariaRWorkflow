@@ -50,7 +50,7 @@ scenarios <- s(
 )
 
 # Run scenarios, extract the data
-scenarios <- write_scenarios(scenarios, experiment_folder, om, overwrite = FALSE) # write XML scenario and scenarios.csv
+scenarios <- write_scenarios(scenarios, experiment_folder, om, validate_xml = TRUE, overwrite = FALSE) # write XML scenario and scenarios.csv
 run(scenarios, experiment_folder, om, slurm, overwrite = FALSE) # run scenarios
 df <- extract(scenarios, experiment_folder, overwrite = FALSE) # extract the data to output.csv
 
