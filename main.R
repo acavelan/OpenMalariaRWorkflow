@@ -6,6 +6,7 @@ source("run.R")
 
 pacman::p_load(data.table, xml2, ggplot2, patchwork)
 
+# IMPORTANT: If using Slurm, check and adapt job.sh to your system
 slurm = list(
     account = "chitnis",
     partition = "scicore",

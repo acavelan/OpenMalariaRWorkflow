@@ -15,7 +15,8 @@ export LMOD_DISABLE_SAME_NAME_AUTOSWAP="no"
 
 module load parallel
 
-# Version 49.0
+# IMPORTANT: load dependencies according to your system
+# IMPORTANT: if using Singularity / Docker, remove the following ml commands
 ml GCCcore/14.3.0
 ml intel-compilers/2025.2.0
 ml GSL/2.8-intel-compilers-2025.2.0 
