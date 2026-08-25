@@ -30,7 +30,7 @@ create_commands <- function(scenarios, experiment_folder, om)
     commands
 }
 
-run <- function(scenarios, experiment_folder, om, slurm = NULL, overwrite = FALSE)
+run <- function(scenarios, experiment_folder, om, slurm = NULL, overwrite = FALSE, local_cores = NULL)
 {
     if (!om$output_format %in% c("bin", "bin.gz", "txt", "txt.gz")) stop("Unknown output_format: ", om$output_format)
 
@@ -52,7 +52,7 @@ run <- function(scenarios, experiment_folder, om, slurm = NULL, overwrite = FALS
     commands = create_commands(scenarios, experiment_folder, om)
     
     message("Running scenarios...")
-    if (is.null(slurm)) run_local(commands, experiment_folder, om) else run_slurm(commands, experiment_folder, om, slurm)
+    if (is.null(slurm)) run_local(commands, experiment_folder, om, local_cores) else run_slurm(commands, experiment_folder, om, slurm)
 }
 
 extract <- function(scenarios, experiment_folder, overwrite = FALSE)
@@ -114,14 +114,18 @@ run_slurm <- function(commands, experiment_folder, om, slurm)
     if (system2("sbatch", c("--wait", "start_array_job.sh")) != 0) stop("Slurm job failed")
 }
 
-run_local <- function(commands, experiment_folder, om)
+run_local <- function(commands, experiment_folder, om, cores = NULL)
 {
   prepare(experiment_folder, om)
   
   n <- length(commands)
-  message("Running ", n, " scenarios locally")
+  if (is.null(cores)) cores <- parallel::detectCores(logical = FALSE)
+  if (is.na(cores)) cores <- parallel::detectCores(logical = TRUE)
+  if (is.na(cores)) cores <- 1L
+  cores <- max(1L, min(as.integer(cores), n))
+  message("Running ", n, " scenarios locally on ", cores, " cores")
   
-  results <- lapply(seq_along(commands), function(i) {
+  run_one <- function(i) {
     cmd <- commands[[i]]
     oldwd <- setwd(experiment_folder); on.exit(setwd(oldwd), add = TRUE)
     
@@ -138,7 +142,16 @@ run_local <- function(commands, experiment_folder, om)
       msg = paste0("Error in task ", i, ": ", cmd, "\n  See log: ", logfile)
       msg
     } else NULL
-  })
+  }
+
+  if (cores == 1L) {
+    results <- lapply(seq_along(commands), run_one)
+  } else {
+    experiment_folder <- normalizePath(experiment_folder, winslash = "/", mustWork = TRUE)
+    cl <- parallel::makeCluster(cores)
+    on.exit(parallel::stopCluster(cl), add = TRUE)
+    results <- parallel::parLapplyLB(cl, seq_along(commands), run_one)
+  }
 
   cat(paste(unlist(results), collapse = "\n"))
 }
