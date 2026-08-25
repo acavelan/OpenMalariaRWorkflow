@@ -19,8 +19,8 @@ slurm = list(
     # if batch_size = cpus_per_task then one OM instance = one CPU = faster
     # if batch_size > cpus_per_task then multiple OM instances per cpus = slower but less Slurm jobs
     # just leave it 16 / 16, 32 / 32, 64 / 64
-    # if more than 53.60 ms00k jobs then 64 / 128 or 64 / 256
 )
+
 if (!nzchar(Sys.which("sbatch"))) slurm <- NULL # slurm = NULL if not available, e.g. running on a laptop
 
 om = list(
@@ -31,7 +31,7 @@ om = list(
 
 experiment_folder = "experiment"
 
-scenarios <- s(
+mapping <- s(
     "snippets/default.xml",
     "demography/@popSize" = 1000,
     "monitoring/@startDate" = "1950-01-01", # 50 years burnin (start date - 50 years)
@@ -49,12 +49,18 @@ scenarios <- s(
     "model/computationParameters/@iseed" = list(seed = 1:3)
 )
 
-# Run scenarios, extract the data
-scenarios <- write_scenarios(scenarios, experiment_folder, om, validate_xml = TRUE, overwrite = FALSE) # write XML scenario and scenarios.csv
-run(scenarios, experiment_folder, om, slurm, overwrite = FALSE) # run scenarios
-df <- extract(scenarios, experiment_folder, overwrite = FALSE) # extract the data to output.csv
+scenarios <- create_scenarios(mapping) # full-factorial list expansion
 
-# Example plotting 
+# Optional: modify the scenario table
+# scenarios <- scenarios[sample(.N, 4)]
+# scenarios[, access := runif(.N, 0.02, 0.20)]
+# scenarios[, index := .I]
+
+write_scenarios(mapping, scenarios, experiment_folder, om, validate_xml = TRUE, overwrite = FALSE)
+run(scenarios, experiment_folder, om, slurm, overwrite = FALSE)
+df <- extract(scenarios, experiment_folder, overwrite = FALSE)
+
+# Example plotting
 ##################
 
 # Load saved results if starting from an existing experiment folder
